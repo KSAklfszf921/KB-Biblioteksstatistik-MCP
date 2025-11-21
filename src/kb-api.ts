@@ -35,6 +35,16 @@ export interface Observation {
   library?: any;
   sampleYear?: number;
   modified?: string;
+  published?: string;
+  targetGroup?: string;
+  [key: string]: any;
+}
+
+export interface Library {
+  '@id': string;
+  name?: string;
+  sigel?: string;
+  municipality?: string;
   [key: string]: any;
 }
 
@@ -287,4 +297,317 @@ export async function getTermCategories(): Promise<Map<string, Term[]>> {
 export async function listTermCategories(): Promise<string[]> {
   const categories = await getTermCategories();
   return Array.from(categories.keys()).sort();
+}
+
+/**
+ * Hämtar observationer för ett specifikt bibliotek
+ */
+export async function getLibraryObservations(
+  libraryId: string,
+  year?: number,
+  termFilter?: string
+): Promise<Observation[]> {
+  const params: ObservationQueryParams = {
+    limit: 1000,
+  };
+
+  if (termFilter) {
+    params.term = termFilter;
+  }
+
+  const data = await fetchObservations(params);
+  const observations = data['@graph'] || [];
+
+  // Filtrera baserat på bibliotek och år
+  return observations.filter(obs => {
+    const libMatch = obs.library &&
+      (typeof obs.library === 'string' ? obs.library.includes(libraryId) : obs.library['@id']?.includes(libraryId));
+
+    const yearMatch = year ? obs.sampleYear === year : true;
+
+    return libMatch && yearMatch;
+  });
+}
+
+/**
+ * Hämtar observationer för ett specifikt år
+ */
+export async function getObservationsByYear(
+  year: number,
+  termFilter?: string,
+  limit: number = 1000
+): Promise<Observation[]> {
+  const params: ObservationQueryParams = {
+    limit,
+  };
+
+  if (termFilter) {
+    params.term = termFilter;
+  }
+
+  const data = await fetchObservations(params);
+  const observations = data['@graph'] || [];
+
+  return observations.filter(obs => obs.sampleYear === year);
+}
+
+/**
+ * Jämför ett biblioteks data mellan två år
+ */
+export async function compareLibraryYears(
+  libraryId: string,
+  year1: number,
+  year2: number,
+  termFilter?: string
+): Promise<{
+  year1Data: Observation[];
+  year2Data: Observation[];
+  comparison: Array<{
+    term: string;
+    year1Value: any;
+    year2Value: any;
+    change?: number;
+    percentChange?: number;
+  }>;
+}> {
+  const year1Data = await getLibraryObservations(libraryId, year1, termFilter);
+  const year2Data = await getLibraryObservations(libraryId, year2, termFilter);
+
+  // Skapa jämförelsedata
+  const comparison: Array<{
+    term: string;
+    year1Value: any;
+    year2Value: any;
+    change?: number;
+    percentChange?: number;
+  }> = [];
+
+  const termsMap = new Map<string, { year1?: any; year2?: any }>();
+
+  year1Data.forEach(obs => {
+    if (obs.term) {
+      termsMap.set(obs.term, { year1: obs.value });
+    }
+  });
+
+  year2Data.forEach(obs => {
+    if (obs.term) {
+      const existing = termsMap.get(obs.term) || {};
+      termsMap.set(obs.term, { ...existing, year2: obs.value });
+    }
+  });
+
+  termsMap.forEach((values, term) => {
+    const comparisonItem: any = {
+      term,
+      year1Value: values.year1,
+      year2Value: values.year2,
+    };
+
+    // Beräkna förändring om båda värdena är numeriska
+    if (typeof values.year1 === 'number' && typeof values.year2 === 'number') {
+      comparisonItem.change = values.year2 - values.year1;
+      if (values.year1 !== 0) {
+        comparisonItem.percentChange = ((values.year2 - values.year1) / values.year1) * 100;
+      }
+    }
+
+    comparison.push(comparisonItem);
+  });
+
+  return {
+    year1Data,
+    year2Data,
+    comparison,
+  };
+}
+
+/**
+ * Hämtar observationer för flera termer samtidigt
+ */
+export async function getMultipleTerms(
+  termIds: string[],
+  year?: number,
+  limit: number = 1000
+): Promise<Map<string, Observation[]>> {
+  const result = new Map<string, Observation[]>();
+
+  for (const termId of termIds) {
+    const params: ObservationQueryParams = {
+      term: termId,
+      limit,
+    };
+
+    const data = await fetchObservations(params);
+    let observations = data['@graph'] || [];
+
+    if (year) {
+      observations = observations.filter(obs => obs.sampleYear === year);
+    }
+
+    result.set(termId, observations);
+  }
+
+  return result;
+}
+
+/**
+ * Aggregerar statistik för en term över flera år
+ */
+export async function getTermTrend(
+  termId: string,
+  startYear: number,
+  endYear: number
+): Promise<{
+  term: string;
+  years: number[];
+  statistics: Array<{
+    year: number;
+    count: number;
+    sum?: number;
+    average?: number;
+    min?: number;
+    max?: number;
+  }>;
+}> {
+  const params: ObservationQueryParams = {
+    term: termId,
+    limit: 5000,
+  };
+
+  const data = await fetchObservations(params);
+  const observations = data['@graph'] || [];
+
+  // Filtrera och gruppera per år
+  const yearMap = new Map<number, number[]>();
+
+  observations.forEach(obs => {
+    if (obs.sampleYear && obs.sampleYear >= startYear && obs.sampleYear <= endYear) {
+      if (typeof obs.value === 'number') {
+        if (!yearMap.has(obs.sampleYear)) {
+          yearMap.set(obs.sampleYear, []);
+        }
+        yearMap.get(obs.sampleYear)!.push(obs.value);
+      }
+    }
+  });
+
+  const years = Array.from(yearMap.keys()).sort();
+  const statistics = years.map(year => {
+    const values = yearMap.get(year) || [];
+    const sum = values.reduce((a, b) => a + b, 0);
+    const average = values.length > 0 ? sum / values.length : undefined;
+    const min = values.length > 0 ? Math.min(...values) : undefined;
+    const max = values.length > 0 ? Math.max(...values) : undefined;
+
+    return {
+      year,
+      count: values.length,
+      sum,
+      average,
+      min,
+      max,
+    };
+  });
+
+  return {
+    term: termId,
+    years,
+    statistics,
+  };
+}
+
+/**
+ * Listar unika bibliotek från observationer
+ */
+export async function listLibraries(limit: number = 1000): Promise<Library[]> {
+  const params: ObservationQueryParams = { limit };
+  const data = await fetchObservations(params);
+  const observations = data['@graph'] || [];
+
+  const librariesMap = new Map<string, Library>();
+
+  observations.forEach(obs => {
+    if (obs.library) {
+      const lib = typeof obs.library === 'object' ? obs.library : { '@id': obs.library };
+      const id = lib['@id'] || lib.toString();
+
+      if (!librariesMap.has(id)) {
+        librariesMap.set(id, {
+          '@id': id,
+          name: lib.name,
+          sigel: lib.sigel,
+          municipality: lib.municipality,
+        });
+      }
+    }
+  });
+
+  return Array.from(librariesMap.values());
+}
+
+/**
+ * Söker bibliotek baserat på namn eller sigel
+ */
+export async function searchLibraries(searchTerm: string): Promise<Library[]> {
+  const libraries = await listLibraries(2000);
+  const search = searchTerm.toLowerCase();
+
+  return libraries.filter(lib => {
+    const name = (lib.name || '').toLowerCase();
+    const sigel = (lib.sigel || '').toLowerCase();
+    const id = lib['@id'].toLowerCase();
+
+    return name.includes(search) || sigel.includes(search) || id.includes(search);
+  });
+}
+
+/**
+ * Hämtar tillgängliga år i statistiken
+ */
+export async function getAvailableYears(limit: number = 2000): Promise<number[]> {
+  const params: ObservationQueryParams = { limit };
+  const data = await fetchObservations(params);
+  const observations = data['@graph'] || [];
+
+  const years = new Set<number>();
+  observations.forEach(obs => {
+    if (obs.sampleYear) {
+      years.add(obs.sampleYear);
+    }
+  });
+
+  return Array.from(years).sort((a, b) => b - a);
+}
+
+/**
+ * Formaterar jämförelsedata till läsbar text
+ */
+export function formatComparison(comparison: Array<{
+  term: string;
+  year1Value: any;
+  year2Value: any;
+  change?: number;
+  percentChange?: number;
+}>): string {
+  let output = '';
+
+  comparison.forEach(item => {
+    output += `**${item.term}**\n`;
+    output += `  År 1: ${item.year1Value !== undefined ? item.year1Value : 'N/A'}\n`;
+    output += `  År 2: ${item.year2Value !== undefined ? item.year2Value : 'N/A'}\n`;
+
+    if (item.change !== undefined) {
+      const changeSymbol = item.change >= 0 ? '+' : '';
+      output += `  Förändring: ${changeSymbol}${item.change.toFixed(2)}`;
+
+      if (item.percentChange !== undefined) {
+        output += ` (${changeSymbol}${item.percentChange.toFixed(1)}%)`;
+      }
+      output += '\n';
+    }
+    output += '\n';
+  });
+
+  return output;
 }
