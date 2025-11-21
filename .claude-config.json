@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "kb-biblioteksstatistik": {
+      "command": "npx",
+      "args": ["-y", "kb-biblioteksstatistik-mcp"],
+      "description": "Kungliga Bibliotekets öppna biblioteksstatistik API"
+    }
+  }
+}

@@ -633,6 +633,93 @@ Ger tillgång till alla termdefinitioner i läsbar format.
 - `Arsverke01`: Bibliotekarier och dokumentalister (årsverken)
 - `Arsverke02`: Biblioteksassistenter (årsverken)
 
+## Installation & Deployment
+
+Servern kan användas både lokalt och som remote server. Se [INSTALL.md](INSTALL.md) för fullständig guide.
+
+### Snabbstart - Lokal installation
+
+```bash
+# Klona och installera
+git clone https://github.com/KSAklfszf921/KB-Biblioteksstatistik-MCP.git
+cd KB-Biblioteksstatistik-MCP
+npm install
+npm run build
+```
+
+### MCP Klient-konfiguration
+
+#### Claude Desktop (Lokal)
+
+Lägg till i `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "kb-biblioteksstatistik": {
+      "command": "node",
+      "args": ["/absolut/sökväg/till/KB-Biblioteksstatistik-MCP/build/index.js"]
+    }
+  }
+}
+```
+
+#### Claude Desktop (Remote via Render)
+
+```json
+{
+  "mcpServers": {
+    "kb-biblioteksstatistik": {
+      "url": "https://your-app.onrender.com/sse"
+    }
+  }
+}
+```
+
+#### Andra MCP-klienter
+
+Servern fungerar med:
+- ✅ Claude Desktop
+- ✅ Cline (VSCode)
+- ✅ Cursor IDE
+- ✅ Continue.dev
+- ✅ Annan MCP-kompatibel klient
+
+Se `mcp-config-examples.json` för fler exempel.
+
+### Remote Deployment (Render)
+
+Servern kan deployas som remote MCP server med SSE transport:
+
+1. **Skapa Web Service på Render**
+   - Anslut GitHub repo
+   - Build command: `npm install && npm run build`
+   - Start command: `npm run start:server`
+   - Plan: Free tier fungerar
+
+2. **Sätt Environment Variables**
+   ```
+   NODE_ENV=production
+   PORT=10000
+   HOST=0.0.0.0
+   ```
+
+3. **Verifiera deployment**
+   ```bash
+   curl https://your-app.onrender.com/health
+   ```
+
+Se `render.yaml` för Infrastructure as Code deployment.
+
+### Endpoints (Remote Server)
+
+När servern körs som remote server:
+
+- **Health Check**: `GET /health`
+- **Server Info**: `GET /`
+- **SSE (MCP)**: `GET /sse`
+- **Message**: `POST /message`
+
 ## Utveckling
 
 ### Bygga projektet

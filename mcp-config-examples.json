@@ -1,0 +1,109 @@
+{
+  "examples": {
+    "claude-desktop-local": {
+      "description": "Claude Desktop - Lokal installation",
+      "config": {
+        "mcpServers": {
+          "kb-biblioteksstatistik": {
+            "command": "node",
+            "args": ["/path/to/KB-Biblioteksstatistik-MCP/build/index.js"],
+            "description": "Kungliga Bibliotekets öppna biblioteksstatistik"
+          }
+        }
+      }
+    },
+    "claude-desktop-npm": {
+      "description": "Claude Desktop - Via NPM (efter publicering)",
+      "config": {
+        "mcpServers": {
+          "kb-biblioteksstatistik": {
+            "command": "npx",
+            "args": ["-y", "kb-biblioteksstatistik-mcp"],
+            "description": "Kungliga Bibliotekets öppna biblioteksstatistik"
+          }
+        }
+      }
+    },
+    "claude-desktop-remote": {
+      "description": "Claude Desktop - Remote server (SSE)",
+      "config": {
+        "mcpServers": {
+          "kb-biblioteksstatistik": {
+            "url": "https://your-render-app.onrender.com/sse",
+            "description": "Kungliga Bibliotekets öppna biblioteksstatistik (Remote)"
+          }
+        }
+      }
+    },
+    "cline-vscode": {
+      "description": "Cline (VSCode Extension) - Lokal",
+      "config": {
+        "mcpServers": {
+          "kb-biblioteksstatistik": {
+            "command": "node",
+            "args": ["/path/to/KB-Biblioteksstatistik-MCP/build/index.js"]
+          }
+        }
+      }
+    },
+    "cursor-ide": {
+      "description": "Cursor IDE - MCP Settings",
+      "config": {
+        "mcpServers": {
+          "kb-biblioteksstatistik": {
+            "command": "node",
+            "args": ["/path/to/KB-Biblioteksstatistik-MCP/build/index.js"]
+          }
+        }
+      }
+    },
+    "custom-mcp-client": {
+      "description": "Anpassad MCP-klient - HTTP/SSE",
+      "endpoint": "https://your-render-app.onrender.com/sse",
+      "method": "GET",
+      "headers": {
+        "Accept": "text/event-stream"
+      }
+    },
+    "openai-gpt-assistant": {
+      "description": "OpenAI GPT med MCP proxy",
+      "note": "Kräver en MCP-till-OpenAI proxy service",
+      "config": {
+        "proxy_url": "https://mcp-proxy.example.com",
+        "mcp_server": "https://your-render-app.onrender.com/sse"
+      }
+    }
+  },
+  "installation": {
+    "local": {
+      "steps": [
+        "1. Klona repot: git clone https://github.com/KSAklfszf921/KB-Biblioteksstatistik-MCP.git",
+        "2. Installera dependencies: npm install",
+        "3. Bygg projektet: npm run build",
+        "4. Lägg till konfiguration i Claude Desktop eller annan MCP-klient",
+        "5. Starta om klienten"
+      ]
+    },
+    "remote": {
+      "steps": [
+        "1. Deploya till Render eller annan hosting",
+        "2. Sätt environment variables (PORT, NODE_ENV)",
+        "3. Starta servern med: npm run start:server",
+        "4. Verifiera med health check: GET /health",
+        "5. Använd SSE endpoint i MCP-klienten: https://your-app.onrender.com/sse"
+      ]
+    }
+  },
+  "environment_variables": {
+    "PORT": "Port för HTTP server (default: 3000)",
+    "HOST": "Host att lyssna på (default: 0.0.0.0)",
+    "NODE_ENV": "Environment (production/development)"
+  },
+  "supported_clients": [
+    "Claude Desktop (Anthropic)",
+    "Cline (VSCode Extension)",
+    "Cursor IDE",
+    "Continue.dev",
+    "Andra MCP-kompatibla klienter"
+  ]
+}
