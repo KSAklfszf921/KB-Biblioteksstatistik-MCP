@@ -1,0 +1,32 @@
+{
+  "name": "kb-biblioteksstatistik-mcp",
+  "version": "1.0.0",
+  "description": "MCP server för Kungliga Bibliotekets öppna biblioteksstatistik API",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "kb-biblioteksstatistik-mcp": "build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "start": "node build/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "kungliga-biblioteket",
+    "biblioteksstatistik",
+    "library-statistics",
+    "opendata"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
