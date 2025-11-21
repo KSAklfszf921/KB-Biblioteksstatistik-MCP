@@ -6,7 +6,18 @@
  * Licens: CC0
  */
 
+import { readFile } from 'fs/promises';
+import { join } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const KB_BIBSTAT_BASE_URL = 'https://bibstat.kb.se';
+
+// Cache för termdefinitioner
+let termsCache: Term[] | null = null;
 
 export interface ObservationQueryParams {
   term?: string;
@@ -29,11 +40,13 @@ export interface Observation {
 
 export interface Term {
   '@id': string;
-  '@type': string;
-  key?: string;
-  label?: any;
-  description?: any;
-  category?: string;
+  '@type': string | string[];
+  label?: string | { sv?: string; '@value'?: string };
+  comment?: string;
+  range?: string;
+  valid?: string;
+  replaces?: string | string[];
+  replacedBy?: string;
   [key: string]: any;
 }
 
@@ -127,19 +140,151 @@ export function formatObservation(obs: Observation): string {
 export function formatTerm(term: Term): string {
   const parts: string[] = [];
 
-  if (term.key) parts.push(`Nyckel: ${term.key}`);
+  parts.push(`ID: ${term['@id']}`);
 
   if (term.label) {
     const label = typeof term.label === 'object' ? term.label.sv || term.label['@value'] : term.label;
     parts.push(`Namn: ${label}`);
   }
 
-  if (term.description) {
-    const desc = typeof term.description === 'object' ? term.description.sv || term.description['@value'] : term.description;
-    parts.push(`Beskrivning: ${desc}`);
+  if (term.range) {
+    const rangeShort = term.range.replace('xsd:', '').replace('https://schema.org/', '');
+    parts.push(`Datatyp: ${rangeShort}`);
   }
 
-  if (term.category) parts.push(`Kategori: ${term.category}`);
-
   return parts.join(' | ');
+}
+
+/**
+ * Formaterar en term med full detaljer
+ */
+export function formatTermDetailed(term: Term): string {
+  let output = `## ${term['@id']}\n\n`;
+
+  if (term.label) {
+    const label = typeof term.label === 'object' ? term.label.sv || term.label['@value'] : term.label;
+    output += `**Namn:** ${label}\n\n`;
+  }
+
+  if (term['@type']) {
+    const types = Array.isArray(term['@type']) ? term['@type'] : [term['@type']];
+    output += `**Typ:** ${types.join(', ')}\n\n`;
+  }
+
+  if (term.comment) {
+    output += `**Beskrivning:** ${term.comment}\n\n`;
+  }
+
+  if (term.range) {
+    output += `**Datatyp:** ${term.range}\n\n`;
+  }
+
+  if (term.valid) {
+    output += `**Giltighetstid:** ${term.valid}\n\n`;
+  }
+
+  if (term.replaces) {
+    const replaces = Array.isArray(term.replaces) ? term.replaces : [term.replaces];
+    output += `**Ersätter:** ${replaces.join(', ')}\n\n`;
+  }
+
+  if (term.replacedBy) {
+    output += `**Ersätts av:** ${term.replacedBy}\n\n`;
+  }
+
+  return output;
+}
+
+/**
+ * Laddar termdefinitioner från lokal fil
+ */
+export async function loadTermsFromFile(): Promise<Term[]> {
+  if (termsCache !== null) {
+    return termsCache;
+  }
+
+  try {
+    const termsPath = join(__dirname, '..', 'terms');
+    const content = await readFile(termsPath, 'utf-8');
+    const data = JSON.parse(content);
+    termsCache = data.terms || [];
+    return termsCache || [];
+  } catch (error) {
+    console.error('Failed to load terms from file:', error);
+    termsCache = [];
+    return [];
+  }
+}
+
+/**
+ * Söker termer baserat på kategori/prefix (ex: "Aktiv", "Besok", "Bestand")
+ */
+export async function searchTermsByCategory(categoryPrefix: string): Promise<Term[]> {
+  const terms = await loadTermsFromFile();
+  const prefix = categoryPrefix.toLowerCase();
+
+  return terms.filter(term => {
+    const id = term['@id'].toLowerCase();
+    return id.startsWith(prefix);
+  });
+}
+
+/**
+ * Söker termer baserat på nyckelord i beskrivning eller namn
+ */
+export async function searchTermsByKeyword(keyword: string): Promise<Term[]> {
+  const terms = await loadTermsFromFile();
+  const searchTerm = keyword.toLowerCase();
+
+  return terms.filter(term => {
+    const id = term['@id'].toLowerCase();
+
+    const label = term.label
+      ? (typeof term.label === 'object' ? term.label.sv || term.label['@value'] || '' : term.label)
+      : '';
+    const labelMatch = label.toLowerCase().includes(searchTerm);
+
+    const comment = term.comment || '';
+    const commentMatch = comment.toLowerCase().includes(searchTerm);
+
+    return id.includes(searchTerm) || labelMatch || commentMatch;
+  });
+}
+
+/**
+ * Hämtar detaljer om en specifik term
+ */
+export async function getTermDetails(termId: string): Promise<Term | null> {
+  const terms = await loadTermsFromFile();
+  return terms.find(term => term['@id'] === termId) || null;
+}
+
+/**
+ * Grupperar termer baserat på prefix (första bokstäverna före siffrorna)
+ */
+export async function getTermCategories(): Promise<Map<string, Term[]>> {
+  const terms = await loadTermsFromFile();
+  const categories = new Map<string, Term[]>();
+
+  terms.forEach(term => {
+    // Extrahera prefix (bokstäver före siffror)
+    const match = term['@id'].match(/^([A-Za-z]+)/);
+    if (match) {
+      const prefix = match[1];
+      if (!categories.has(prefix)) {
+        categories.set(prefix, []);
+      }
+      categories.get(prefix)!.push(term);
+    }
+  });
+
+  return categories;
+}
+
+/**
+ * Hämtar alla tillgängliga kategorier (prefix)
+ */
+export async function listTermCategories(): Promise<string[]> {
+  const categories = await getTermCategories();
+  return Array.from(categories.keys()).sort();
 }

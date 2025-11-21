@@ -22,6 +22,11 @@ import {
   fetchTerms,
   formatObservation,
   formatTerm,
+  formatTermDetailed,
+  searchTermsByCategory,
+  searchTermsByKeyword,
+  getTermDetails,
+  listTermCategories,
   type ObservationQueryParams
 } from './kb-api.js';
 
@@ -81,6 +86,56 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'get_term_definitions',
         description: 'Hämtar alla termdefinitioner som används i biblioteksstatistiken. Använd detta för att se vilka termer som finns tillgängliga (ex: Folk54 för besök, Skol24 för skolbibliotek, etc.)',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'search_terms_by_category',
+        description: 'Söker termer baserat på kategori/prefix. Använd detta för att hitta alla termer inom en viss kategori, t.ex. "Aktiv" för aktiva låntagare, "Besok" för besöksstatistik, "Bestand" för beståndsdata, "Arsverke" för personalstatistik.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            category: {
+              type: 'string',
+              description: 'Kategori/prefix att söka efter (ex: "Aktiv", "Besok", "Bestand", "Arsverke", "Folk", "Forsk", "Skol")',
+            },
+          },
+          required: ['category'],
+        },
+      },
+      {
+        name: 'search_terms_by_keyword',
+        description: 'Söker termer baserat på nyckelord i beskrivning eller namn. Använd detta för att hitta termer relaterade till ett specifikt ämne (ex: "låntagare", "besök", "böcker", "personal").',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            keyword: {
+              type: 'string',
+              description: 'Nyckelord att söka efter i termdefinitioner',
+            },
+          },
+          required: ['keyword'],
+        },
+      },
+      {
+        name: 'get_term_details',
+        description: 'Hämtar detaljerad information om en specifik term inkl. beskrivning, datatyp, giltighetstid och eventuella ersättningar.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            term_id: {
+              type: 'string',
+              description: 'Term-ID att hämta detaljer för (ex: "Folk54", "Aktiv01", "Bestand101")',
+            },
+          },
+          required: ['term_id'],
+        },
+      },
+      {
+        name: 'list_term_categories',
+        description: 'Listar alla tillgängliga termkategorier/prefix i biblioteksstatistiken.',
         inputSchema: {
           type: 'object',
           properties: {},
@@ -202,6 +257,121 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       terms.forEach((term, index) => {
         result += `${index + 1}. ${formatTerm(term)}\n`;
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: result,
+          },
+        ],
+      };
+    }
+
+    if (name === 'search_terms_by_category') {
+      const category = args?.category as string;
+
+      if (!category) {
+        throw new McpError(ErrorCode.InvalidParams, 'Parameter "category" är obligatorisk');
+      }
+
+      const terms = await searchTermsByCategory(category);
+
+      let result = `# Termer i kategori: ${category}\n\n`;
+      result += `Antal termer funna: ${terms.length}\n\n`;
+
+      if (terms.length > 0) {
+        result += `## Termer\n\n`;
+        terms.forEach((term, index) => {
+          result += `${index + 1}. ${formatTerm(term)}\n`;
+        });
+      } else {
+        result += `Inga termer hittades som börjar med "${category}".\n`;
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: result,
+          },
+        ],
+      };
+    }
+
+    if (name === 'search_terms_by_keyword') {
+      const keyword = args?.keyword as string;
+
+      if (!keyword) {
+        throw new McpError(ErrorCode.InvalidParams, 'Parameter "keyword" är obligatorisk');
+      }
+
+      const terms = await searchTermsByKeyword(keyword);
+
+      let result = `# Termer som matchar nyckelord: "${keyword}"\n\n`;
+      result += `Antal termer funna: ${terms.length}\n\n`;
+
+      if (terms.length > 0) {
+        result += `## Termer\n\n`;
+        terms.forEach((term, index) => {
+          result += `${index + 1}. ${formatTerm(term)}\n`;
+        });
+      } else {
+        result += `Inga termer hittades som matchar "${keyword}".\n`;
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: result,
+          },
+        ],
+      };
+    }
+
+    if (name === 'get_term_details') {
+      const termId = args?.term_id as string;
+
+      if (!termId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Parameter "term_id" är obligatorisk');
+      }
+
+      const term = await getTermDetails(termId);
+
+      if (!term) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `# Term hittades inte\n\nIngen term med ID "${termId}" kunde hittas i biblioteksstatistiken.`,
+            },
+          ],
+        };
+      }
+
+      const result = `# Termdetaljer\n\n${formatTermDetailed(term)}`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: result,
+          },
+        ],
+      };
+    }
+
+    if (name === 'list_term_categories') {
+      const categories = await listTermCategories();
+
+      let result = `# Termkategorier i Biblioteksstatistiken\n\n`;
+      result += `Totalt antal kategorier: ${categories.length}\n\n`;
+      result += `## Tillgängliga kategorier\n\n`;
+
+      categories.forEach((category, index) => {
+        result += `${index + 1}. **${category}** - Använd "search_terms_by_category" för att se alla termer i denna kategori\n`;
       });
 
       return {

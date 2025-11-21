@@ -85,25 +85,141 @@ Hämtar alla tillgängliga termdefinitioner som används i biblioteksstatistiken
 {}
 ```
 
+### 3. search_terms_by_category
+
+Söker termer baserat på kategori/prefix. Användbart för att hitta alla termer inom en viss kategori.
+
+**Parametrar:**
+- `category` (obligatorisk): Kategori/prefix att söka efter
+
+**Exempel:**
+```typescript
+// Hämta alla termer för aktiva låntagare
+{
+  "category": "Aktiv"
+}
+
+// Hämta alla termer för besöksstatistik
+{
+  "category": "Besok"
+}
+
+// Hämta alla termer för beståndsdata
+{
+  "category": "Bestand"
+}
+```
+
+**Vanliga kategorier:**
+- `Aktiv` - Aktiva låntagare
+- `Arsverke` - Personalstatistik (årsverken)
+- `Barn` - Barn- och ungdomsrelaterad statistik
+- `BemanService` - Bemannade serviceställen
+- `Besok` - Besöksstatistik
+- `Bestand` - Beståndsstatistik
+- `Folk` - Folkbiblioteksspecifika termer
+- `Forsk` - Forskningsbiblioteksspecifika termer
+- `Skol` - Skolbiblioteksspecifika termer
+- `Lan` - Lånestatistik
+- `Oppet` - Öppettider
+- `Utgift` - Utgifter och kostnader
+
+### 4. search_terms_by_keyword
+
+Söker termer baserat på nyckelord i beskrivning eller namn.
+
+**Parametrar:**
+- `keyword` (obligatorisk): Nyckelord att söka efter
+
+**Exempel:**
+```typescript
+// Sök termer relaterade till låntagare
+{
+  "keyword": "låntagare"
+}
+
+// Sök termer relaterade till böcker
+{
+  "keyword": "bok"
+}
+
+// Sök termer relaterade till e-medier
+{
+  "keyword": "elektronisk"
+}
+```
+
+### 5. get_term_details
+
+Hämtar detaljerad information om en specifik term.
+
+**Parametrar:**
+- `term_id` (obligatorisk): Term-ID att hämta detaljer för
+
+**Exempel:**
+```typescript
+// Hämta detaljer om Folk54 (antal besök)
+{
+  "term_id": "Folk54"
+}
+
+// Hämta detaljer om Aktiv01 (aktiva kvinnliga låntagare)
+{
+  "term_id": "Aktiv01"
+}
+```
+
+### 6. list_term_categories
+
+Listar alla tillgängliga termkategorier/prefix i biblioteksstatistiken.
+
+**Parametrar:** Inga
+
+**Exempel:**
+```typescript
+// Lista alla kategorier
+{}
+```
+
 ## Resurser
 
 ### kb://terms
 
 Ger tillgång till alla termdefinitioner i läsbar format.
 
-## API-endpoints som används
+## API-endpoints och datakällor
 
 1. **Observationer**: `https://bibstat.kb.se/data`
    - Returnerar mätpunkter för bibliotek, år och termer
+   - Tillgänglig via `search_library_statistics` verktyget
 
 2. **Termer**: `https://bibstat.kb.se/def/terms`
    - Returnerar definitioner av alla termer
+   - Tillgänglig via `get_term_definitions` verktyget
+
+3. **Lokal termdatabas**: `terms` (fil i projektroten)
+   - Innehåller 793 termdefinitioner med detaljerad metadata
+   - Används av `search_terms_by_category`, `search_terms_by_keyword`, `get_term_details` och `list_term_categories`
+   - Cachad i minnet för snabba sökningar
 
 ## Exempel på vanliga termer
 
+**Folkbibliotek:**
 - `Folk54`: Antal besök folkbibliotek
-- `Skol24`: Data om skolbibliotek
-- `Forsk12`: Forskarbibliotek data
+- `Aktiv01`: Antal aktiva kvinnliga låntagare
+- `Aktiv02`: Antal aktiva manliga låntagare
+- `Lan101`: Utlån av böcker
+
+**Forskningsbibliotek:**
+- `Forsk12`: Forskningsbibliotek data
+- `Bestand101`: Antal böcker i bestånd
+
+**Skolbibliotek:**
+- `Skol24`: Skolbibliotek data
+
+**Personal:**
+- `Arsverke01`: Bibliotekarier och dokumentalister (årsverken)
+- `Arsverke02`: Biblioteksassistenter (årsverken)
 
 ## Utveckling
 
