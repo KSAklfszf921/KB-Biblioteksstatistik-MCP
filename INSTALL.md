@@ -13,23 +13,48 @@ KB Biblioteksstatistik MCP Server kan användas både lokalt och som remote serv
 
 ## Lokal Installation
 
+Den lokala installationen kräver endast **@modelcontextprotocol/sdk** och är mycket lätt. Remote server dependencies (express, cors, dotenv) är optional och installeras inte för lokal användning.
+
 ### Förutsättningar
 
 - Node.js >= 18.0.0
 - npm eller yarn
 
-### Steg 1: Klona och installera
+### Alternativ 1: Från GitHub (Rekommenderat för utveckling)
 
 ```bash
 # Klona repot
 git clone https://github.com/KSAklfszf921/KB-Biblioteksstatistik-MCP.git
 cd KB-Biblioteksstatistik-MCP
 
-# Installera dependencies
-npm install
+# Installera endast nödvändiga dependencies för lokal användning
+npm install --omit=optional
+
+# Eller använd npm script
+npm run install:local
 
 # Bygg projektet
 npm run build
+```
+
+### Alternativ 2: Global NPM installation (Efter publicering)
+
+```bash
+# Installera globalt via npm
+npm install -g kb-biblioteksstatistik-mcp
+
+# Eller använd direkt med npx (ingen installation behövs)
+npx kb-biblioteksstatistik-mcp
+```
+
+### Alternativ 3: Lokal NPM länkning (För utveckling)
+
+```bash
+# I projektkatalogen
+npm link
+
+# Nu kan du använda kommandot globalt
+kb-biblioteksstatistik-mcp
 ```
 
 ### Steg 2: Konfigurera MCP-klient
@@ -80,9 +105,49 @@ I Cursor IDE settings (MCP-sektion):
 }
 ```
 
+#### NPX (Efter publicering till npm)
+
+Det enklaste sättet - ingen lokal installation behövs:
+
+```json
+{
+  "mcpServers": {
+    "kb-biblioteksstatistik": {
+      "command": "npx",
+      "args": ["-y", "kb-biblioteksstatistik-mcp"],
+      "description": "Kungliga Bibliotekets öppna biblioteksstatistik"
+    }
+  }
+}
+```
+
+#### Global installation
+
+Om du installerat globalt med npm:
+
+```json
+{
+  "mcpServers": {
+    "kb-biblioteksstatistik": {
+      "command": "kb-biblioteksstatistik-mcp",
+      "description": "Kungliga Bibliotekets öppna biblioteksstatistik"
+    }
+  }
+}
+```
+
 ### Steg 3: Starta om klienten
 
 Starta om din MCP-klient (Claude Desktop, Cline, etc.) för att ladda servern.
+
+### Viktigt för lokal användning
+
+⚠️ **Lokal installation använder INTE remote server dependencies**
+
+- Endast `@modelcontextprotocol/sdk` installeras (required)
+- `express`, `cors`, `dotenv` är optional (endast för remote server)
+- Total storlek för lokal installation: ~5 MB
+- Servern körs via stdio transport (direktkommunikation)
 
 ---
 
@@ -90,10 +155,25 @@ Starta om din MCP-klient (Claude Desktop, Cline, etc.) för att ladda servern.
 
 Denna server kan deployas som en remote MCP server med SSE (Server-Sent Events) transport.
 
+⚠️ **OBS**: Remote deployment kräver alla dependencies inklusive express, cors, dotenv.
+
 ### Förutsättningar
 
 - Render account (gratis tier fungerar)
 - Git repository (GitHub, GitLab, etc.)
+
+### Installation för remote deployment
+
+```bash
+# Installera ALLA dependencies (inklusive optional)
+npm install
+
+# Eller använd npm script
+npm run install:remote
+
+# Bygg projektet
+npm run build
+```
 
 ### Metod 1: Deploy via Render Dashboard
 

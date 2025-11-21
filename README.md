@@ -635,21 +635,37 @@ Ger tillgång till alla termdefinitioner i läsbar format.
 
 ## Installation & Deployment
 
-Servern kan användas både lokalt och som remote server. Se [INSTALL.md](INSTALL.md) för fullständig guide.
+Servern kan användas både **lokalt** (lätt, minimal installation) och som **remote server** (Render deployment). Se [INSTALL.md](INSTALL.md) för fullständig guide.
 
-### Snabbstart - Lokal installation
+### 🚀 Snabbstart - Lokal installation
+
+Lokal installation kräver endast `@modelcontextprotocol/sdk` (~5 MB). Remote server dependencies är optional.
 
 ```bash
-# Klona och installera
+# Klona repot
 git clone https://github.com/KSAklfszf921/KB-Biblioteksstatistik-MCP.git
 cd KB-Biblioteksstatistik-MCP
-npm install
+
+# Installera endast nödvändiga dependencies (exkluderar express, cors, dotenv)
+npm install --omit=optional
+
+# Bygg projektet
 npm run build
+```
+
+### 📦 NPM Installation (Efter publicering)
+
+```bash
+# Global installation
+npm install -g kb-biblioteksstatistik-mcp
+
+# Eller använd direkt med npx (rekommenderat)
+npx kb-biblioteksstatistik-mcp
 ```
 
 ### MCP Klient-konfiguration
 
-#### Claude Desktop (Lokal)
+#### Claude Desktop - Lokal (från GitHub)
 
 Lägg till i `claude_desktop_config.json`:
 
@@ -659,6 +675,21 @@ Lägg till i `claude_desktop_config.json`:
     "kb-biblioteksstatistik": {
       "command": "node",
       "args": ["/absolut/sökväg/till/KB-Biblioteksstatistik-MCP/build/index.js"]
+    }
+  }
+}
+```
+
+#### Claude Desktop - NPX (rekommenderat)
+
+Enklaste sättet - ingen lokal installation behövs:
+
+```json
+{
+  "mcpServers": {
+    "kb-biblioteksstatistik": {
+      "command": "npx",
+      "args": ["-y", "kb-biblioteksstatistik-mcp"]
     }
   }
 }
