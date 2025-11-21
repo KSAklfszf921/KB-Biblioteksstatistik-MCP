@@ -611,3 +611,295 @@ export function formatComparison(comparison: Array<{
 
   return output;
 }
+
+/**
+ * Hämtar observationer filtrerade på målgrupp (targetGroup)
+ */
+export async function getObservationsByTargetGroup(
+  targetGroup: string,
+  year?: number,
+  termFilter?: string,
+  limit: number = 1000
+): Promise<Observation[]> {
+  const params: ObservationQueryParams = { limit };
+
+  if (termFilter) {
+    params.term = termFilter;
+  }
+
+  const data = await fetchObservations(params);
+  const observations = data['@graph'] || [];
+
+  return observations.filter(obs => {
+    const targetMatch = obs.targetGroup === targetGroup;
+    const yearMatch = year ? obs.sampleYear === year : true;
+    return targetMatch && yearMatch;
+  });
+}
+
+/**
+ * Aggregerar statistik för en term per målgrupp
+ */
+export async function aggregateByTargetGroup(
+  termId: string,
+  year?: number
+): Promise<Map<string, {
+  count: number;
+  sum?: number;
+  average?: number;
+  min?: number;
+  max?: number;
+}>> {
+  const params: ObservationQueryParams = {
+    term: termId,
+    limit: 5000,
+  };
+
+  const data = await fetchObservations(params);
+  let observations = data['@graph'] || [];
+
+  if (year) {
+    observations = observations.filter(obs => obs.sampleYear === year);
+  }
+
+  const groupMap = new Map<string, number[]>();
+
+  observations.forEach(obs => {
+    if (obs.targetGroup && typeof obs.value === 'number') {
+      if (!groupMap.has(obs.targetGroup)) {
+        groupMap.set(obs.targetGroup, []);
+      }
+      groupMap.get(obs.targetGroup)!.push(obs.value);
+    }
+  });
+
+  const result = new Map<string, {
+    count: number;
+    sum?: number;
+    average?: number;
+    min?: number;
+    max?: number;
+  }>();
+
+  groupMap.forEach((values, targetGroup) => {
+    const sum = values.reduce((a, b) => a + b, 0);
+    result.set(targetGroup, {
+      count: values.length,
+      sum,
+      average: sum / values.length,
+      min: Math.min(...values),
+      max: Math.max(...values),
+    });
+  });
+
+  return result;
+}
+
+/**
+ * Jämför flera bibliotek för samma term och år
+ */
+export async function compareMultipleLibraries(
+  libraryIds: string[],
+  termId: string,
+  year: number
+): Promise<Array<{
+  libraryId: string;
+  value: any;
+  observation?: Observation;
+}>> {
+  const results: Array<{
+    libraryId: string;
+    value: any;
+    observation?: Observation;
+  }> = [];
+
+  for (const libraryId of libraryIds) {
+    const observations = await getLibraryObservations(libraryId, year, termId);
+
+    if (observations.length > 0) {
+      const obs = observations[0];
+      results.push({
+        libraryId,
+        value: obs.value,
+        observation: obs,
+      });
+    } else {
+      results.push({
+        libraryId,
+        value: null,
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Beräknar avancerad statistik för numeriska värden
+ */
+export function calculateStatistics(values: number[]): {
+  count: number;
+  sum: number;
+  mean: number;
+  median: number;
+  mode: number | null;
+  min: number;
+  max: number;
+  range: number;
+  variance: number;
+  standardDeviation: number;
+  percentile25: number;
+  percentile75: number;
+} {
+  if (values.length === 0) {
+    throw new Error('Cannot calculate statistics for empty array');
+  }
+
+  const sorted = [...values].sort((a, b) => a - b);
+  const count = values.length;
+  const sum = values.reduce((a, b) => a + b, 0);
+  const mean = sum / count;
+
+  // Median
+  const median = count % 2 === 0
+    ? (sorted[count / 2 - 1] + sorted[count / 2]) / 2
+    : sorted[Math.floor(count / 2)];
+
+  // Mode
+  const frequency = new Map<number, number>();
+  values.forEach(v => frequency.set(v, (frequency.get(v) || 0) + 1));
+  const maxFreq = Math.max(...frequency.values());
+  const modes = Array.from(frequency.entries())
+    .filter(([, freq]) => freq === maxFreq)
+    .map(([val]) => val);
+  const mode = modes.length === count ? null : modes[0];
+
+  // Variance and standard deviation
+  const variance = values.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / count;
+  const standardDeviation = Math.sqrt(variance);
+
+  // Min and max
+  const min = sorted[0];
+  const max = sorted[count - 1];
+  const range = max - min;
+
+  // Percentiles
+  const percentile25 = sorted[Math.floor(count * 0.25)];
+  const percentile75 = sorted[Math.floor(count * 0.75)];
+
+  return {
+    count,
+    sum,
+    mean,
+    median,
+    mode,
+    min,
+    max,
+    range,
+    variance,
+    standardDeviation,
+    percentile25,
+    percentile75,
+  };
+}
+
+/**
+ * Genererar en sammanfattande rapport för en term
+ */
+export async function generateTermReport(
+  termId: string,
+  year: number
+): Promise<{
+  term: string;
+  year: number;
+  termDetails: Term | null;
+  totalObservations: number;
+  statistics: ReturnType<typeof calculateStatistics> | null;
+  byTargetGroup: Map<string, { count: number; average?: number }>;
+  topLibraries: Array<{ library: string; value: number }>;
+}> {
+  const termDetails = await getTermDetails(termId);
+  const params: ObservationQueryParams = {
+    term: termId,
+    limit: 5000,
+  };
+
+  const data = await fetchObservations(params);
+  const observations = (data['@graph'] || []).filter(obs => obs.sampleYear === year);
+
+  const numericValues = observations
+    .map(obs => obs.value)
+    .filter(v => typeof v === 'number') as number[];
+
+  const statistics = numericValues.length > 0
+    ? calculateStatistics(numericValues)
+    : null;
+
+  // By target group
+  const byTargetGroup = await aggregateByTargetGroup(termId, year);
+
+  // Top libraries
+  const librariesWithValues = observations
+    .filter(obs => typeof obs.value === 'number')
+    .map(obs => ({
+      library: typeof obs.library === 'object' ? obs.library['@id'] || obs.library.name : obs.library,
+      value: obs.value as number,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
+
+  return {
+    term: termId,
+    year,
+    termDetails,
+    totalObservations: observations.length,
+    statistics,
+    byTargetGroup,
+    topLibraries: librariesWithValues,
+  };
+}
+
+/**
+ * Exporterar data till CSV-format
+ */
+export function exportToCSV(observations: Observation[]): string {
+  if (observations.length === 0) {
+    return '';
+  }
+
+  const headers = ['@id', 'term', 'value', 'library', 'sampleYear', 'targetGroup', 'modified'];
+  let csv = headers.join(',') + '\n';
+
+  observations.forEach(obs => {
+    const row = [
+      `"${obs['@id'] || ''}"`,
+      `"${obs.term || ''}"`,
+      obs.value !== undefined ? obs.value : '',
+      `"${typeof obs.library === 'object' ? obs.library['@id'] || obs.library.name : obs.library || ''}"`,
+      obs.sampleYear || '',
+      `"${obs.targetGroup || ''}"`,
+      `"${obs.modified || ''}"`,
+    ];
+    csv += row.join(',') + '\n';
+  });
+
+  return csv;
+}
+
+/**
+ * Listar tillgängliga målgrupper
+ */
+export async function listTargetGroups(limit: number = 2000): Promise<string[]> {
+  const params: ObservationQueryParams = { limit };
+  const data = await fetchObservations(params);
+  const observations = data['@graph'] || [];
+
+  const groups = new Set<string>();
+  observations.forEach(obs => {
+    if (obs.targetGroup) {
+      groups.add(obs.targetGroup);
+    }
+  });
+
+  return Array.from(groups).sort();
+}

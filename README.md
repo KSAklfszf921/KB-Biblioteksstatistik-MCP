@@ -1,39 +1,58 @@
-# KB Biblioteksstatistik MCP Server
+# KB Biblioteksstatistik MCP Server v2.0
 
-En MCP (Model Context Protocol) server för att söka i Kungliga Bibliotekets öppna biblioteksstatistik.
+En komplett MCP (Model Context Protocol) server för att söka och analysera Kungliga Bibliotekets öppna biblioteksstatistik.
 
 ## Översikt
 
-Denna server tillhandahåller verktyg för att söka i den officiella svenska biblioteksstatistiken via KB:s öppna data API. Data finns tillgänglig för offentligt finansierade bibliotek från verksamhetsår 2014 och framåt.
+Denna server tillhandahåller omfattande verktyg för att söka, analysera och rapportera den officiella svenska biblioteksstatistiken via KB:s öppna data API. Data finns tillgänglig för offentligt finansierade bibliotek från verksamhetsår 2014 och framåt.
 
 - **API**: https://bibstat.kb.se/
 - **Format**: JSON-LD
 - **Licens**: CC0 (Public Domain)
-- **Antal verktyg**: 14 specialiserade verktyg
-- **Termdatabas**: 793 termdefinitioner
+- **Version**: 2.0.0
+- **Antal verktyg**: 20 specialiserade verktyg
+- **Antal prompts**: 5 färdiga analysmallar
+- **Termdatabas**: 793 termdefinitioner med 3 dimensioner
+- **Datatyper**: 787 mätvariabler (integer, decimal, boolean, string)
 
 ## Funktioner
 
 ### Termsökning (6 verktyg)
-- Hämta alla termdefinitioner
-- Sök termer efter kategori/prefix
-- Sök termer med nyckelord
-- Detaljerad terminformation
-- Lista alla kategorier
+- Hämta alla termdefinitioner från API
+- Sök termer efter kategori/prefix (60+ kategorier)
+- Sök termer med nyckelord i beskrivning
+- Detaljerad terminformation med metadata
+- Lista alla kategorier alphabetiskt
+- Lista alla målgrupper
 
-### Observationssökning (2 verktyg)
+### Observationssökning (3 verktyg)
 - Sök observationer med avancerade filter
 - Hämta statistik för specifika år
+- Filtrera på målgrupp (folkbibliotek, forskbibliotek, skolbibliotek)
 
 ### Biblioteksanalys (4 verktyg)
 - Hämta all data för ett bibliotek
-- Jämför bibliotek mellan olika år
-- Lista och sök bibliotek
-- Hämta tillgängliga år
+- Jämför ett bibliotek mellan olika år
+- Jämför flera bibliotek samtidigt
+- Lista och sök bibliotek (namn, sigel, ID)
 
-### Avancerad analys (2 verktyg)
-- Trendanalys över flera år
-- Hämta flera termer samtidigt
+### Avancerad analys (4 verktyg)
+- Trendanalys över flera år med statistik
+- Hämta flera termer samtidigt (batch)
+- Aggregera per målgrupp (medel, min, max)
+- Generera omfattande rapport med all statistik
+
+### Export & Rapportering (3 verktyg)
+- Exportera till CSV för Excel
+- Generera rapporter med avancerad statistik
+- Hämta tillgängliga år och målgrupper
+
+### MCP Prompts (5 färdiga mallar)
+- **analyze-library-trends**: Analysera bibliotekstrender över tid
+- **compare-library-types**: Jämför folk-, forsk- och skolbibliotek
+- **generate-annual-report**: Generera årsrapport för term
+- **benchmark-libraries**: Benchmarka flera bibliotek
+- **discover-terms**: Utforska termer för ämnesområde
 
 ## Installation
 
@@ -383,6 +402,196 @@ Hämtar lista över alla tillgängliga år i statistiken.
 // Hämta tillgängliga år
 {}
 ```
+
+### 15. get_observations_by_target_group
+
+Hämtar observationer filtrerade på målgrupp (folkbibliotek, forskbibliotek, skolbibliotek).
+
+**Parametrar:**
+- `target_group` (obligatorisk): Målgrupp att filtrera på
+- `year` (valfri): Filtrera på specifikt år
+- `term` (valfri): Filtrera på specifik term
+- `limit` (valfri): Max antal resultat (default: 1000)
+
+**Exempel:**
+```typescript
+// Hämta all folkbiblioteksstatistik för 2023
+{
+  "target_group": "folkbibliotek",
+  "year": 2023
+}
+
+// Hämta besöksstatistik för forskbibliotek
+{
+  "target_group": "forskbibliotek",
+  "term": "Folk54"
+}
+
+// Hämta skolbiblioteksdata
+{
+  "target_group": "skolbibliotek",
+  "year": 2022,
+  "limit": 500
+}
+```
+
+### 16. aggregate_by_target_group
+
+Aggregerar statistik per målgrupp med medelvärde, min och max.
+
+**Parametrar:**
+- `term_id` (obligatorisk): Term-ID att aggregera
+- `year` (valfri): Filtrera på specifikt år
+
+**Exempel:**
+```typescript
+// Aggregera besöksstatistik per bibliotekstyp
+{
+  "term_id": "Folk54",
+  "year": 2023
+}
+
+// Aggregera aktiva låntagare per målgrupp
+{
+  "term_id": "Aktiv99"
+}
+```
+
+### 17. compare_multiple_libraries
+
+Jämför flera bibliotek samtidigt för en specifik term och år.
+
+**Parametrar:**
+- `library_ids` (obligatorisk): Array med biblioteks-ID:n eller biblioteksnamn
+- `term_id` (obligatorisk): Term att jämföra
+- `year` (obligatorisk): År att jämföra
+
+**Exempel:**
+```typescript
+// Jämför tre storstadsbibliotek
+{
+  "library_ids": ["Stockholm", "Göteborg", "Malmö"],
+  "term_id": "Folk54",
+  "year": 2023
+}
+
+// Jämför universitetsbibliotek
+{
+  "library_ids": ["Uppsala", "Lund", "Linköping"],
+  "term_id": "Bestand101",
+  "year": 2022
+}
+```
+
+### 18. generate_term_report
+
+Genererar en omfattande rapport för en term med detaljerad statistik.
+
+**Parametrar:**
+- `term_id` (obligatorisk): Term-ID att generera rapport för
+- `year` (obligatorisk): År för rapporten
+
+**Rapport innehåller:**
+- Termdefinition och metadata
+- Totalt antal observationer
+- Fullständig statistik (medel, median, standardavvikelse, percentiler)
+- Uppdelning per målgrupp
+- Topp 10 bibliotek
+
+**Exempel:**
+```typescript
+// Generera rapport för besöksstatistik 2023
+{
+  "term_id": "Folk54",
+  "year": 2023
+}
+
+// Generera rapport för aktiva låntagare
+{
+  "term_id": "Aktiv99",
+  "year": 2022
+}
+```
+
+### 19. export_to_csv
+
+Exporterar observationer till CSV-format för Excel eller dataanalys.
+
+**Parametrar:**
+- `term` (valfri): Filtrera på specifik term
+- `year` (valfri): Filtrera på specifikt år
+- `target_group` (valfri): Filtrera på målgrupp
+- `limit` (valfri): Max antal observationer (default: 5000)
+
+**Exempel:**
+```typescript
+// Exportera all folkbiblioteksstatistik 2023 till CSV
+{
+  "year": 2023,
+  "target_group": "folkbibliotek",
+  "limit": 10000
+}
+
+// Exportera besöksstatistik till CSV
+{
+  "term": "Folk54",
+  "year": 2022
+}
+```
+
+### 20. list_target_groups
+
+Listar alla tillgängliga målgrupper i statistiken.
+
+**Parametrar:**
+- `limit` (valfri): Max antal observationer att söka igenom (default: 2000)
+
+**Exempel:**
+```typescript
+// Lista alla målgrupper
+{}
+```
+
+## MCP Prompts (Analysmallar)
+
+Servern tillhandahåller 5 färdiga analysmallar (prompts) för vanliga analysuppgifter:
+
+### analyze-library-trends
+Analyserar trender för ett bibliotek över flera år.
+
+**Parametrar:**
+- `library_name`: Biblioteksnamn eller ID
+- `start_year`: Startår
+- `end_year`: Slutår
+- `terms`: Kommaseparerad lista med term-ID:n (valfri)
+
+### compare-library-types
+Jämför olika typer av bibliotek (folk-, forsk-, skolbibliotek) för en specifik term.
+
+**Parametrar:**
+- `term_id`: Term-ID att jämföra
+- `year`: År för jämförelsen
+
+### generate-annual-report
+Genererar en årlig rapport för en term med fullständig statistik.
+
+**Parametrar:**
+- `term_id`: Term-ID
+- `year`: År för rapporten
+
+### benchmark-libraries
+Benchmarkar flera bibliotek mot varandra.
+
+**Parametrar:**
+- `library_names`: Kommaseparerad lista med biblioteksnamn
+- `terms`: Kommaseparerad lista med term-ID:n
+- `year`: År för benchmarking
+
+### discover-terms
+Utforska och hitta relevanta termer för ett ämnesområde.
+
+**Parametrar:**
+- `topic`: Ämnesområde eller kategori (ex: "besök", "lån", "bestånd")
 
 ## Resurser
 

@@ -1,6 +1,6 @@
 {
   "name": "kb-biblioteksstatistik-mcp",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "MCP server för Kungliga Bibliotekets öppna biblioteksstatistik API",
   "type": "module",
   "main": "build/index.js",

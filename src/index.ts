@@ -14,6 +14,8 @@ import {
   ListResourcesRequestSchema,
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
   ErrorCode,
   McpError
 } from '@modelcontextprotocol/sdk/types.js';
@@ -36,6 +38,12 @@ import {
   listLibraries,
   searchLibraries,
   getAvailableYears,
+  getObservationsByTargetGroup,
+  aggregateByTargetGroup,
+  compareMultipleLibraries,
+  generateTermReport,
+  exportToCSV,
+  listTargetGroups,
   type ObservationQueryParams,
   type Library
 } from './kb-api.js';
@@ -46,12 +54,13 @@ import {
 const server = new Server(
   {
     name: 'kb-biblioteksstatistik-mcp',
-    version: '1.0.0',
+    version: '2.0.0',
   },
   {
     capabilities: {
       tools: {},
       resources: {},
+      prompts: {},
     },
   }
 );
@@ -310,6 +319,129 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
         },
       },
+      {
+        name: 'get_observations_by_target_group',
+        description: 'Hämtar observationer filtrerade på målgrupp (folkbibliotek, forskningsbibliotek, skolbibliotek, etc.).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            target_group: {
+              type: 'string',
+              description: 'Målgrupp (ex: "folkbibliotek", "forskbibliotek", "skolbibliotek")',
+            },
+            year: {
+              type: 'number',
+              description: 'Filtrera på specifikt år (valfri)',
+            },
+            term: {
+              type: 'string',
+              description: 'Filtrera på specifik term (valfri)',
+            },
+            limit: {
+              type: 'number',
+              description: 'Max antal resultat (default: 1000)',
+              default: 1000,
+            },
+          },
+          required: ['target_group'],
+        },
+      },
+      {
+        name: 'aggregate_by_target_group',
+        description: 'Aggregerar statistik för en term uppdelat per målgrupp. Visar medel, min, max per typ av bibliotek.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            term_id: {
+              type: 'string',
+              description: 'Term-ID att aggregera',
+            },
+            year: {
+              type: 'number',
+              description: 'Filtrera på specifikt år (valfri)',
+            },
+          },
+          required: ['term_id'],
+        },
+      },
+      {
+        name: 'compare_multiple_libraries',
+        description: 'Jämför flera bibliotek för samma term och år. Visar värden sida vid sida.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            library_ids: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Lista med biblioteks-ID:n att jämföra',
+            },
+            term_id: {
+              type: 'string',
+              description: 'Term-ID att jämföra',
+            },
+            year: {
+              type: 'number',
+              description: 'Året att jämföra',
+            },
+          },
+          required: ['library_ids', 'term_id', 'year'],
+        },
+      },
+      {
+        name: 'generate_term_report',
+        description: 'Genererar en omfattande rapport för en term inkl. statistik, top 10 bibliotek, och uppdelning per målgrupp.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            term_id: {
+              type: 'string',
+              description: 'Term-ID att generera rapport för',
+            },
+            year: {
+              type: 'number',
+              description: 'Året att generera rapport för',
+            },
+          },
+          required: ['term_id', 'year'],
+        },
+      },
+      {
+        name: 'export_to_csv',
+        description: 'Exporterar observationer till CSV-format för vidare analys i Excel eller andra verktyg.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            term: {
+              type: 'string',
+              description: 'Term att exportera',
+            },
+            year: {
+              type: 'number',
+              description: 'År att exportera (valfri)',
+            },
+            limit: {
+              type: 'number',
+              description: 'Max antal observationer (default: 1000)',
+              default: 1000,
+            },
+          },
+          required: ['term'],
+        },
+      },
+      {
+        name: 'list_target_groups',
+        description: 'Listar alla tillgängliga målgrupper i statistiken (folkbibliotek, forskningsbibliotek, etc.).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            limit: {
+              type: 'number',
+              description: 'Max antal observationer att söka igenom (default: 2000)',
+              default: 2000,
+            },
+          },
+        },
+      },
     ],
   };
 });
@@ -367,6 +499,243 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   }
 
   throw new McpError(ErrorCode.InvalidRequest, `Unknown resource: ${uri}`);
+});
+
+/**
+ * Handler för att lista tillgängliga prompts (instruction templates)
+ */
+server.setRequestHandler(ListPromptsRequestSchema, async () => {
+  return {
+    prompts: [
+      {
+        name: 'analyze-library-trends',
+        description: 'Analysera trender för ett bibliotek över flera år',
+        arguments: [
+          {
+            name: 'library_name',
+            description: 'Namnet på biblioteket att analysera',
+            required: true,
+          },
+          {
+            name: 'start_year',
+            description: 'Startår för analys',
+            required: true,
+          },
+          {
+            name: 'end_year',
+            description: 'Slutår för analys',
+            required: true,
+          },
+        ],
+      },
+      {
+        name: 'compare-library-types',
+        description: 'Jämför olika typer av bibliotek (folk, forsk, skol) för en specifik term',
+        arguments: [
+          {
+            name: 'term_id',
+            description: 'Term att jämföra (ex: Folk54)',
+            required: true,
+          },
+          {
+            name: 'year',
+            description: 'År att jämföra',
+            required: true,
+          },
+        ],
+      },
+      {
+        name: 'generate-annual-report',
+        description: 'Generera en årsrapport för en specifik term med full statistik',
+        arguments: [
+          {
+            name: 'term_id',
+            description: 'Term att rapporten (ex: Aktiv99)',
+            required: true,
+          },
+          {
+            name: 'year',
+            description: 'År för rapporten',
+            required: true,
+          },
+        ],
+      },
+      {
+        name: 'benchmark-libraries',
+        description: 'Jämför flera bibliotek mot varandra för benchmarking',
+        arguments: [
+          {
+            name: 'library_names',
+            description: 'Kommaseparerad lista med biblioteksnamn',
+            required: true,
+          },
+          {
+            name: 'terms',
+            description: 'Kommaseparerad lista med termer att jämföra',
+            required: true,
+          },
+          {
+            name: 'year',
+            description: 'År för jämförelse',
+            required: true,
+          },
+        ],
+      },
+      {
+        name: 'discover-terms',
+        description: 'Utforska och hitta relevanta termer för ett specifikt ämnesområde',
+        arguments: [
+          {
+            name: 'topic',
+            description: 'Ämnesområde (ex: "besök", "låntagare", "personal", "bestånd")',
+            required: true,
+          },
+        ],
+      },
+    ],
+  };
+});
+
+/**
+ * Handler för att hämta specifikt prompt
+ */
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === 'analyze-library-trends') {
+    const libraryName = args?.library_name as string;
+    const startYear = args?.start_year as string;
+    const endYear = args?.end_year as string;
+
+    return {
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `Analysera trender för ${libraryName} från ${startYear} till ${endYear}:
+
+1. Använd search_libraries för att hitta biblioteket
+2. Använd list_term_categories för att se tillgängliga kategorier
+3. För viktiga termer som Folk54 (besök), Aktiv99 (aktiva låntagare), och Lan101 (utlån):
+   - Använd get_term_trend för att se utveckling över tid
+   - Använd compare_library_years för att jämföra ${startYear} med ${endYear}
+4. Sammanfatta trenderna och identifiera eventuella förändringsmönster
+5. Ge rekommendationer baserat på data`,
+          },
+        },
+      ],
+    };
+  }
+
+  if (name === 'compare-library-types') {
+    const termId = args?.term_id as string;
+    const year = args?.year as string;
+
+    return {
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `Jämför olika bibliotekstyper för ${termId} år ${year}:
+
+1. Använd get_term_details för att förstå vad ${termId} betyder
+2. Använd list_target_groups för att se tillgängliga målgrupper
+3. Använd aggregate_by_target_group med term_id="${termId}" och year=${year}
+4. Analysera skillnaderna mellan folkbibliotek, forskningsbibliotek och skolbibliotek
+5. Identifiera vilken typ av bibliotek som presterar bäst för denna term
+6. Förklara möjliga orsaker till skillnaderna`,
+          },
+        },
+      ],
+    };
+  }
+
+  if (name === 'generate-annual-report') {
+    const termId = args?.term_id as string;
+    const year = args?.year as string;
+
+    return {
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `Generera en omfattande årsrapport för ${termId} år ${year}:
+
+1. Använd generate_term_report med term_id="${termId}" och year=${year}
+2. Komplettera med:
+   - get_term_details för fullständig beskrivning
+   - aggregate_by_target_group för målgruppsanalys
+   - list_libraries för att se vilka bibliotek som rapporterar
+3. Presentera rapporten strukturerat med:
+   - Översikt och nyckeltal
+   - Statistisk analys (medel, median, standardavvikelse)
+   - Top 10 bibliotek
+   - Analys per målgrupp
+   - Slutsatser och trender`,
+          },
+        },
+      ],
+    };
+  }
+
+  if (name === 'benchmark-libraries') {
+    const libraryNames = args?.library_names as string;
+    const terms = args?.terms as string;
+    const year = args?.year as string;
+
+    const libArray = libraryNames.split(',').map(s => s.trim());
+    const termArray = terms.split(',').map(s => s.trim());
+
+    return {
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `Benchmarka biblioteken ${libraryNames} för år ${year}:
+
+1. För varje term i [${terms}]:
+   - Använd compare_multiple_libraries med library_ids=${JSON.stringify(libArray)}, term_id=<term>, year=${year}
+   - Identifiera vilket bibliotek som presterar bäst
+2. Skapa en sammanfattande jämförelsetabell
+3. Analysera styrkor och svagheter för varje bibliotek
+4. Ge rekommendationer för förbättringsområden
+5. Identifiera best practices från topppresterande bibliotek`,
+          },
+        },
+      ],
+    };
+  }
+
+  if (name === 'discover-terms') {
+    const topic = args?.topic as string;
+
+    return {
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `Utforska termer relaterade till "${topic}":
+
+1. Använd search_terms_by_keyword med keyword="${topic}"
+2. Använd list_term_categories för att se alla kategorier
+3. För relevanta termer:
+   - Använd get_term_details för att få fullständig beskrivning
+   - Visa exempel på data med search_library_statistics
+4. Gruppera termerna efter kategori
+5. Förklara hur termerna kan användas för analys
+6. Ge exempel på användbara kombinationer av termer`,
+          },
+        },
+      ],
+    };
+  }
+
+  throw new McpError(ErrorCode.InvalidRequest, `Unknown prompt: ${name}`);
 });
 
 /**
@@ -812,6 +1181,250 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       result += `## År (nyast till äldst)\n\n`;
       years.forEach((year, index) => {
         result += `${index + 1}. ${year}\n`;
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: result,
+          },
+        ],
+      };
+    }
+
+    if (name === 'get_observations_by_target_group') {
+      const targetGroup = args?.target_group as string;
+      const year = args?.year as number | undefined;
+      const term = args?.term as string | undefined;
+      const limit = (args?.limit as number | undefined) || 1000;
+
+      if (!targetGroup) {
+        throw new McpError(ErrorCode.InvalidParams, 'Parameter "target_group" är obligatorisk');
+      }
+
+      const observations = await getObservationsByTargetGroup(targetGroup, year, term, limit);
+
+      let result = `# Observationer för målgrupp: ${targetGroup}\n\n`;
+      if (year) result += `År: ${year}\n`;
+      if (term) result += `Term: ${term}\n`;
+      result += `Antal observationer: ${observations.length}\n\n`;
+
+      if (observations.length > 0) {
+        result += `## Observationer\n\n`;
+        observations.slice(0, 50).forEach((obs, index) => {
+          result += `${index + 1}. ${formatObservation(obs)}\n`;
+        });
+
+        if (observations.length > 50) {
+          result += `\n... och ${observations.length - 50} observationer till\n`;
+        }
+      } else {
+        result += 'Inga observationer hittades för denna målgrupp.\n';
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: result,
+          },
+        ],
+      };
+    }
+
+    if (name === 'aggregate_by_target_group') {
+      const termId = args?.term_id as string;
+      const year = args?.year as number | undefined;
+
+      if (!termId) {
+        throw new McpError(ErrorCode.InvalidParams, 'Parameter "term_id" är obligatorisk');
+      }
+
+      const aggregated = await aggregateByTargetGroup(termId, year);
+
+      let result = `# Aggregering per målgrupp: ${termId}\n\n`;
+      if (year) result += `År: ${year}\n`;
+      result += `Antal målgrupper: ${aggregated.size}\n\n`;
+
+      result += `## Statistik per målgrupp\n\n`;
+
+      aggregated.forEach((stats, targetGroup) => {
+        result += `**${targetGroup}**\n`;
+        result += `  Antal observationer: ${stats.count}\n`;
+        if (stats.sum !== undefined) result += `  Summa: ${stats.sum.toFixed(2)}\n`;
+        if (stats.average !== undefined) result += `  Medel: ${stats.average.toFixed(2)}\n`;
+        if (stats.min !== undefined) result += `  Min: ${stats.min}\n`;
+        if (stats.max !== undefined) result += `  Max: ${stats.max}\n`;
+        result += '\n';
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: result,
+          },
+        ],
+      };
+    }
+
+    if (name === 'compare_multiple_libraries') {
+      const libraryIds = args?.library_ids as string[];
+      const termId = args?.term_id as string;
+      const year = args?.year as number;
+
+      if (!libraryIds || !Array.isArray(libraryIds) || libraryIds.length === 0) {
+        throw new McpError(ErrorCode.InvalidParams, 'Parameter "library_ids" måste vara en icke-tom array');
+      }
+
+      if (!termId || !year) {
+        throw new McpError(ErrorCode.InvalidParams, 'Parametrar "term_id" och "year" är obligatoriska');
+      }
+
+      const comparison = await compareMultipleLibraries(libraryIds, termId, year);
+
+      let result = `# Jämförelse av bibliotek\n\n`;
+      result += `Term: ${termId}\n`;
+      result += `År: ${year}\n`;
+      result += `Antal bibliotek: ${libraryIds.length}\n\n`;
+
+      result += `## Resultat\n\n`;
+
+      comparison.forEach((item, index) => {
+        result += `${index + 1}. **${item.libraryId}**\n`;
+        result += `   Värde: ${item.value !== null ? item.value : 'Ingen data'}\n`;
+        if (item.observation) {
+          result += `   Bibliotek: ${typeof item.observation.library === 'object' ? item.observation.library.name || item.observation.library['@id'] : item.observation.library}\n`;
+        }
+        result += '\n';
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: result,
+          },
+        ],
+      };
+    }
+
+    if (name === 'generate_term_report') {
+      const termId = args?.term_id as string;
+      const year = args?.year as number;
+
+      if (!termId || !year) {
+        throw new McpError(ErrorCode.InvalidParams, 'Parametrar "term_id" och "year" är obligatoriska');
+      }
+
+      const report = await generateTermReport(termId, year);
+
+      let result = `# Rapport: ${termId} (${year})\n\n`;
+
+      if (report.termDetails) {
+        result += `## Termbeskrivning\n\n`;
+        result += formatTermDetailed(report.termDetails);
+      }
+
+      result += `## Översikt\n\n`;
+      result += `Totalt antal observationer: ${report.totalObservations}\n\n`;
+
+      if (report.statistics) {
+        result += `## Statistisk analys\n\n`;
+        const stats = report.statistics;
+        result += `- Antal: ${stats.count}\n`;
+        result += `- Summa: ${stats.sum.toFixed(2)}\n`;
+        result += `- Medel: ${stats.mean.toFixed(2)}\n`;
+        result += `- Median: ${stats.median.toFixed(2)}\n`;
+        result += `- Standardavvikelse: ${stats.standardDeviation.toFixed(2)}\n`;
+        result += `- Min: ${stats.min}\n`;
+        result += `- Max: ${stats.max}\n`;
+        result += `- Spridning: ${stats.range}\n`;
+        result += `- 25:e percentil: ${stats.percentile25}\n`;
+        result += `- 75:e percentil: ${stats.percentile75}\n`;
+        if (stats.mode !== null) result += `- Typvärde: ${stats.mode}\n`;
+        result += '\n';
+      }
+
+      if (report.byTargetGroup.size > 0) {
+        result += `## Per målgrupp\n\n`;
+        report.byTargetGroup.forEach((stats, group) => {
+          result += `**${group}**\n`;
+          result += `  Antal: ${stats.count}`;
+          if (stats.average !== undefined) result += `, Medel: ${stats.average.toFixed(2)}`;
+          result += '\n';
+        });
+        result += '\n';
+      }
+
+      if (report.topLibraries.length > 0) {
+        result += `## Top 10 bibliotek\n\n`;
+        report.topLibraries.forEach((lib, index) => {
+          result += `${index + 1}. ${lib.library}: ${lib.value}\n`;
+        });
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: result,
+          },
+        ],
+      };
+    }
+
+    if (name === 'export_to_csv') {
+      const term = args?.term as string;
+      const year = args?.year as number | undefined;
+      const limit = (args?.limit as number | undefined) || 1000;
+
+      if (!term) {
+        throw new McpError(ErrorCode.InvalidParams, 'Parameter "term" är obligatorisk');
+      }
+
+      const params: ObservationQueryParams = {
+        term,
+        limit,
+      };
+
+      const data = await fetchObservations(params);
+      let observations = data['@graph'] || [];
+
+      if (year) {
+        observations = observations.filter(obs => obs.sampleYear === year);
+      }
+
+      const csv = exportToCSV(observations);
+
+      let result = `# CSV Export\n\n`;
+      result += `Term: ${term}\n`;
+      if (year) result += `År: ${year}\n`;
+      result += `Antal observationer: ${observations.length}\n\n`;
+      result += `## CSV Data\n\n\`\`\`csv\n${csv}\n\`\`\`\n`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: result,
+          },
+        ],
+      };
+    }
+
+    if (name === 'list_target_groups') {
+      const limit = (args?.limit as number | undefined) || 2000;
+
+      const targetGroups = await listTargetGroups(limit);
+
+      let result = `# Målgrupper i biblioteksstatistiken\n\n`;
+      result += `Antal målgrupper: ${targetGroups.length}\n\n`;
+
+      result += `## Tillgängliga målgrupper\n\n`;
+      targetGroups.forEach((group, index) => {
+        result += `${index + 1}. ${group}\n`;
       });
 
       return {
